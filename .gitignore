@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.envrc.local
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / RN / Expo
+node_modules/
+.expo/
+dist/
+*.log
+
+# C++ / Juce / CMake
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+*.o
+*.a
+*.dylib
+*.so
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

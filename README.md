@@ -63,6 +63,7 @@ These modes feed into each other. You can start with a feeling ("frustration abo
 
 ## Documentation
 
+- [`execution-plan.md`](./execution-plan.md) — Staged build plan and live progress tracker
 - [`backend-architecture.md`](./backend-architecture.md) — Python backend design, NLP stack, vector embeddings, API
 - [`mobile-app-spec.md`](./mobile-app-spec.md) — React Native capture app
 - [`ableton-plugin-spec.md`](./ableton-plugin-spec.md) — Juce plugin for Ableton Live

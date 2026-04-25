@@ -77,7 +77,7 @@ Returns structured data describing *what* makes reference songs work both techni
 | API framework | FastAPI |
 | NLP — structural | NLTK |
 | NLP — semantic | spaCy |
-| Embeddings | word2fec / FastText (or sentence-transformers if richer embeddings needed) |
+| Embeddings | word2vec / FastText (or sentence-transformers if richer embeddings needed) |
 | Database | PostgreSQL with pgvector extension |
 | Process management | systemd or Docker Compose on DL380 |
 | Hosting | HPE DL380 Gen9 homelab server |

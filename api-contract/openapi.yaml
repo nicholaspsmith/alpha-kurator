@@ -1,0 +1,524 @@
+openapi: 3.0.3
+info:
+  title: Lyric Assistant API
+  version: 0.1.0
+  description: |
+    REST API for the Lyric Assistant homelab backend. Serves the React Native mobile
+    capture app and the Juce/Ableton plugin. v0 contract — frozen at Stage 0 of the
+    execution plan; later stages add depth without changing endpoint shapes.
+
+    All requests require `Authorization: Bearer <token>`.
+  contact:
+    name: Lyric Assistant
+servers:
+  - url: http://localhost:8000
+    description: Local dev
+  - url: http://homelab.local:8000
+    description: Homelab (replace with Tailscale hostname or LAN IP in practice)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: submissions
+    description: User-captured raw input and generated suggestions
+  - name: reference-songs
+    description: Reference corpus management
+  - name: artists
+    description: Artist vocabularies and listings
+  - name: autocomplete
+    description: Low-latency next-word/phrase suggestions for the Ableton plugin
+  - name: system
+    description: Health and operational endpoints
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Liveness + readiness probe
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Service unhealthy (DB down or model not loaded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /submissions:
+    post:
+      tags: [submissions]
+      summary: Create a new submission from raw input
+      operationId: createSubmission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionCreate'
+      responses:
+        '201':
+          description: Submission accepted; analysis queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /submissions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SubmissionId'
+    get:
+      tags: [submissions]
+      summary: Fetch a submission by id
+      operationId: getSubmission
+      responses:
+        '200':
+          description: Submission found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /submissions/{id}/suggestions:
+    parameters:
+      - $ref: '#/components/parameters/SubmissionId'
+    get:
+      tags: [submissions]
+      summary: Fetch generated suggestions for a submission
+      operationId: getSubmissionSuggestions
+      responses:
+        '200':
+          description: Suggestions for this submission (may be empty if status is pending or analyzing)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Suggestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /reference-songs:
+    get:
+      tags: [reference-songs]
+      summary: List reference songs in the corpus
+      operationId: listReferenceSongs
+      parameters:
+        - name: artist
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by artist name (exact match)
+      responses:
+        '200':
+          description: Reference song list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReferenceSong'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [reference-songs]
+      summary: Add a reference song to the corpus
+      operationId: createReferenceSong
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceSongCreate'
+      responses:
+        '201':
+          description: Reference song stored; analysis + embedding queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceSong'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artists:
+    get:
+      tags: [artists]
+      summary: List distinct artists present in the corpus
+      operationId: listArtists
+      responses:
+        '200':
+          description: Artist list, sorted alphabetically
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Artist'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artists/{name}/vocabulary:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Artist name (case-sensitive, exact match against the corpus)
+    get:
+      tags: [artists]
+      summary: Frequency-weighted vocabulary for an artist
+      operationId: getArtistVocabulary
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 1000
+          description: Cap on vocabulary entries returned, ranked by frequency
+      responses:
+        '200':
+          description: Vocabulary entries with normalized frequency weights
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArtistVocabularyEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /autocomplete:
+    post:
+      tags: [autocomplete]
+      summary: Low-latency next-word/phrase suggestions
+      description: |
+        Optimized path for the Ableton plugin. Embeds the trailing tokens of
+        `context_text`, returns nearest neighbors filtered to grammatically
+        plausible POS tags. Optionally biased by a reference artist's vocabulary.
+      operationId: requestAutocomplete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutocompleteRequest'
+      responses:
+        '200':
+          description: Ranked autocomplete suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutocompleteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Static bearer token from the server's `LYRIC_ASSISTANT_TOKEN` env var
+
+  parameters:
+    SubmissionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Submission UUID
+
+  responses:
+    BadRequest:
+      description: Request was malformed or failed validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        db:
+          type: string
+          enum: [up, down]
+        embedding_model:
+          type: string
+          enum: [loaded, loading, unavailable]
+        version:
+          type: string
+          example: "0.1.0"
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Short machine-readable error code
+          example: not_found
+        detail:
+          type: string
+          description: Human-readable explanation
+
+    SubmissionStatus:
+      type: string
+      enum: [pending, analyzing, complete, failed]
+      description: Lifecycle of a submission from creation through analysis
+
+    SubmissionCreate:
+      type: object
+      required: [raw_input]
+      properties:
+        raw_input:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: The user's raw thought, lyric fragment, or feeling
+        mood_tags:
+          type: array
+          items:
+            type: string
+          example: [frustrated, political, verse]
+        reference_artist:
+          type: string
+          nullable: true
+          description: Optional artist whose vocabulary biases generated suggestions
+        source:
+          type: string
+          enum: [mobile, ableton-export, api]
+          default: api
+          description: Origin of the submission, used for analytics and history filtering
+
+    Submission:
+      type: object
+      required: [id, raw_input, status, submission_date, mood_tags, source]
+      properties:
+        id:
+          type: string
+          format: uuid
+        raw_input:
+          type: string
+        status:
+          $ref: '#/components/schemas/SubmissionStatus'
+        submission_date:
+          type: string
+          format: date-time
+        mood_tags:
+          type: array
+          items:
+            type: string
+        reference_artist:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [mobile, ableton-export, api]
+
+    SuggestionType:
+      type: string
+      enum: [rhyme_pattern, semantic_alternative, next_word, artist_style, thematic]
+
+    Suggestion:
+      type: object
+      required: [id, submission_id, suggestion_type, content, confidence_score, created_date]
+      properties:
+        id:
+          type: string
+          format: uuid
+        submission_id:
+          type: string
+          format: uuid
+        suggestion_type:
+          $ref: '#/components/schemas/SuggestionType'
+        content:
+          type: object
+          additionalProperties: true
+          description: |
+            Type-specific payload. Concrete shape depends on `suggestion_type`:
+            - rhyme_pattern: { line_index, candidates: [{word, rhyme_score}] }
+            - semantic_alternative: { source_word, alternatives: [{word, similarity}] }
+            - next_word: { context, candidates: [{word, score, pos}] }
+            - artist_style: { artist, hints: [...] }
+            - thematic: { themes: [...], notes }
+        confidence_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        created_date:
+          type: string
+          format: date-time
+
+    ReferenceSongCreate:
+      type: object
+      required: [title, artist, lyrics]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        artist:
+          type: string
+          minLength: 1
+        lyrics:
+          type: string
+          minLength: 1
+        genre:
+          type: array
+          items:
+            type: string
+        mood_tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+          description: Personal notes on why this song matters
+
+    ReferenceSong:
+      type: object
+      required: [id, title, artist, lyrics, genre, mood_tags, analysis_date]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        artist:
+          type: string
+        lyrics:
+          type: string
+        genre:
+          type: array
+          items:
+            type: string
+        mood_tags:
+          type: array
+          items:
+            type: string
+        analysis_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null until analysis completes
+        notes:
+          type: string
+          nullable: true
+
+    Artist:
+      type: object
+      required: [name, song_count]
+      properties:
+        name:
+          type: string
+        song_count:
+          type: integer
+          minimum: 0
+
+    ArtistVocabularyEntry:
+      type: object
+      required: [word, frequency_weight]
+      properties:
+        word:
+          type: string
+        frequency_weight:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Normalized frequency within this artist's corpus
+
+    AutocompleteRequest:
+      type: object
+      required: [context_text]
+      properties:
+        context_text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: The text the user has typed so far; backend embeds the trailing window
+        max_suggestions:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        reference_artist:
+          type: string
+          nullable: true
+          description: Optional artist vocabulary bias
+
+    AutocompleteCandidate:
+      type: object
+      required: [word, score]
+      properties:
+        word:
+          type: string
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        pos:
+          type: string
+          description: Part-of-speech tag (Penn Treebank-style), if known
+        source:
+          type: string
+          enum: [embedding, artist_vocab, ngram]
+
+    AutocompleteResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/AutocompleteCandidate'
+        cache_hint:
+          type: string
+          description: Stable hash of the context window; clients may use it as an LRU key
