@@ -28,15 +28,20 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · ⏸️ blocked
 | Stage | Status | Notes |
 |-------|--------|-------|
 | 0 — Repo bootstrap & API contract | ✅ | Done 2026-04-25 |
-| 1 — Thinnest vertical slice (echo) | ⬜ | Backend ⬜ · Mobile ⬜ · Ableton ⬜ |
+| 1 — Thinnest vertical slice (echo) | 🟡 | Backend 🟡 (code ✅, end-to-end verify ⏸️ Docker) · Mobile ✅ · Ableton ✅ |
 | 2 — Backend depth (NLTK + spaCy + embeddings) | ⬜ | |
 | 3 — Mobile depth (offline + push + history) | ⬜ | Blocked on APNS/FCM credentials |
 | 4 — Ableton plugin depth (autocomplete + panel) | ⬜ | |
 | 5 — Homelab deploy + ops | ⬜ | |
 
-**Current focus:** Stage 1 backend slice — Docker Compose, Postgres+pgvector, Alembic migration 0001, FastAPI echo analyzer
+**Current focus:** Stage 1 — all three slice codebases written; awaiting Docker daemon to run end-to-end backend verification (`docker compose up -d` + curl round-trip)
 
 **Implementation log** (newest first):
+- 2026-04-28 — Stage 1 code landed across all three slices.
+  - **Backend**: FastAPI app (`backend/app/`) with `/healthz`, `POST /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/suggestions`. Bearer auth dep. Echo analyzer flips status to `complete` synchronously and writes a thematic `{echo: raw_input}` suggestion. SQLAlchemy 2.0 async + asyncpg models matching the schema. Alembic migration `0001_initial.py` creates all six tables, `CREATE EXTENSION vector`, IVFFlat indexes on the embedding columns. `Dockerfile` + root `docker-compose.yml` (pgvector/pgvector:pg16 + api). Token via `LYRIC_ASSISTANT_TOKEN` env. Python files all `py_compile`-clean.
+  - **Mobile**: Expo SDK 52 + RN 0.76 + TS skeleton in `mobile/`. `CaptureScreen.tsx` with text input, submit, history list, and a one-time token entry flow. `expo-secure-store` for the bearer token. Backend URL via `expo.extra.backendUrl` in `app.json`.
+  - **Ableton**: Juce 8.0.4 plugin in `ableton/` via CMake `FetchContent` (no submodules). VST3 + AU targets. `PluginEditor` has `TextEditor`, Submit, status, response view; `BackendClient` posts to `/submissions` and polls `/submissions/{id}` then fetches `/submissions/{id}/suggestions`. Token + URL compiled in for Stage 1; promoted to settings in Stage 4.
+- 2026-04-28 — Backend end-to-end verification blocked: Docker Desktop daemon not running locally; will run `docker compose up -d` + curl round-trip once daemon is up.
 - 2026-04-25 — Stage 0 complete: monorepo dirs created (`backend/`, `mobile/`, `ableton/`, `api-contract/`), root `.gitignore` added, `api-contract/openapi.yaml` written and validated by `@redocly/cli` (3 stylistic warnings accepted: missing license field, localhost server entry for dev, no 4xx on `/healthz` since the endpoint has no validation/auth path). Fixed `word2fec` → `word2vec` typo in `backend-architecture.md` line 80.
 - 2026-04-25 — Stage 0 kicked off
 
