@@ -6,7 +6,9 @@ services:
       POSTGRES_PASSWORD: lyric
       POSTGRES_DB: lyric
     ports:
-      - "5432:5432"
+      # Host port 5434 to avoid clashing with a local Postgres on 5432.
+      # Inside the compose network the API still talks to db:5432.
+      - "5434:5432"
     volumes:
       - lyric_pgdata:/var/lib/postgresql/data
     healthcheck:

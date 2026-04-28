@@ -28,15 +28,16 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · ⏸️ blocked
 | Stage | Status | Notes |
 |-------|--------|-------|
 | 0 — Repo bootstrap & API contract | ✅ | Done 2026-04-25 |
-| 1 — Thinnest vertical slice (echo) | 🟡 | Backend 🟡 (code ✅, end-to-end verify ⏸️ Docker) · Mobile ✅ · Ableton ✅ |
+| 1 — Thinnest vertical slice (echo) | 🟡 | Backend ✅ · Mobile ✅ (untested on device) · Ableton ✅ (untested on device) |
 | 2 — Backend depth (NLTK + spaCy + embeddings) | ⬜ | |
 | 3 — Mobile depth (offline + push + history) | ⬜ | Blocked on APNS/FCM credentials |
 | 4 — Ableton plugin depth (autocomplete + panel) | ⬜ | |
 | 5 — Homelab deploy + ops | ⬜ | |
 
-**Current focus:** Stage 1 — all three slice codebases written; awaiting Docker daemon to run end-to-end backend verification (`docker compose up -d` + curl round-trip)
+**Current focus:** Stage 1 backend verified end-to-end; mobile + Ableton clients untested against real hardware (run when convenient). Ready to start Stage 2 (real NLTK/spaCy/FastText analyzer).
 
 **Implementation log** (newest first):
+- 2026-04-28 — Stage 1 backend verified end-to-end. `docker compose up -d --build` brought up `pgvector/pgvector:pg16` + api; Alembic 0001 ran cleanly, pgvector 0.8.2 loaded. Curl round-trip: `GET /healthz` → 200 (`db: up`); `POST /submissions` without bearer → 401 with `{error: unauthorized}`; `POST /submissions` with bearer → 201 with `status: complete`; `GET /submissions/{id}/suggestions` → echo suggestion `{echo: "<raw_input>"}`; `GET /submissions/<bogus>` → 404 with `{error: not_found}`. Two small fixes during verification: (a) host port for `db` remapped 5432→5434 to avoid conflict with the user's local Postgres, (b) `models.py` was importing the non-existent `Real` symbol from sqlalchemy — switched to `Float` to match the migration. Mobile + Ableton clients are coded but untested on real device/Live install; the contract works, so leaving those for opportunistic testing.
 - 2026-04-28 — Stage 1 code landed across all three slices.
   - **Backend**: FastAPI app (`backend/app/`) with `/healthz`, `POST /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/suggestions`. Bearer auth dep. Echo analyzer flips status to `complete` synchronously and writes a thematic `{echo: raw_input}` suggestion. SQLAlchemy 2.0 async + asyncpg models matching the schema. Alembic migration `0001_initial.py` creates all six tables, `CREATE EXTENSION vector`, IVFFlat indexes on the embedding columns. `Dockerfile` + root `docker-compose.yml` (pgvector/pgvector:pg16 + api). Token via `LYRIC_ASSISTANT_TOKEN` env. Python files all `py_compile`-clean.
   - **Mobile**: Expo SDK 52 + RN 0.76 + TS skeleton in `mobile/`. `CaptureScreen.tsx` with text input, submit, history list, and a one-time token entry flow. `expo-secure-store` for the bearer token. Backend URL via `expo.extra.backendUrl` in `app.json`.

@@ -4,9 +4,9 @@ from datetime import datetime
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     ARRAY,
+    Float,
     ForeignKey,
     Integer,
-    Real,
     String,
     Text,
     func,
@@ -75,7 +75,7 @@ class ArtistVocabulary(Base):
     )
     artist_name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     word: Mapped[str] = mapped_column(Text, nullable=False)
-    frequency_weight: Mapped[float] = mapped_column(Real, nullable=False)
+    frequency_weight: Mapped[float] = mapped_column(Float, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
 
 
@@ -113,7 +113,7 @@ class SubmissionSuggestion(Base):
     )
     suggestion_type: Mapped[str] = mapped_column(String(64), nullable=False)
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    confidence_score: Mapped[float] = mapped_column(Real, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
     created_date: Mapped[datetime] = mapped_column(
         nullable=False, server_default=func.now()
     )
